@@ -52,6 +52,7 @@ export async function createEventAction(
 	const postData: CreateEventRequest = {
 		name: formData.name,
 		date: formData.date,
+		repeatEvery: formData.repeats !== "None" ? formData.repeats : null,
 		memberNames: groupData.members.flatMap((member) => member.username),
 		groupId: groupData.id,
 	};

@@ -69,17 +69,27 @@ function AddEventForm({
 		register,
 		handleSubmit,
 		setError,
+		watch,
 		formState: { errors, isSubmitting },
-	} = useForm({ resolver: zodResolver(createEventSchema) });
+	} = useForm({
+		resolver: zodResolver(createEventSchema),
+		defaultValues: {
+			repeats: "None"
+		}
+	});
 	const router = useRouter();
+	const repeatValue = watch("repeats");
 
 	const onSubmit = async (data: any) => {
+		console.log("Submitting event with data:", data);
 		const res = await createEventAction(data, groupData);
-		// toggleAddEventState()
-		console.log("AddEventForm", res);
+		console.log("AddEventForm response:", res);
 		if (res.ok) {
 			toggleAddEventState();
-			router.push("/");
+			// Use router.refresh() instead of push to refresh the page data without a full navigation
+			router.refresh();
+		} else {
+			console.error("Failed to create event:", res.message);
 		}
 	};
 
@@ -143,7 +153,7 @@ function AddEventForm({
 
 				<div>
 					<label className="mb-1 block text-sm font-medium text-gray-700">
-						Repeats (not implemented yet)
+						Repeats
 					</label>
 					<div className="flex space-x-2 overflow-x-auto pb-2">
 						{["None", "Daily", "Weekly", "Monthly", "Yearly"].map(
@@ -155,8 +165,7 @@ function AddEventForm({
 									<input
 										type="radio"
 										value={option}
-										checked={index === 0 ? true : false}
-										disabled // TODO: implement backend logic to allow repeat events
+										checked={repeatValue === option}
 										{...register("repeats")}
 										className="peer hidden"
 									/>
@@ -336,9 +345,42 @@ function EventItem({ event }: { event: EventDisplayData }) {
 }
 
 function filterEventsByDate(events: EventDisplayData[], targetDate: Dayjs) {
-	return events.filter((event) =>
-		dayjs(event.first_date).isSame(targetDate, "day"),
-	);
+	return events.filter((event) => {
+		const eventDate = dayjs(event.first_date);
+
+		// Check if it's the same day (for non-repeating or first occurrence)
+		if (eventDate.isSame(targetDate, "day")) {
+			return true;
+		}
+
+		// Handle repeating events
+		if (event.repeat_every) {
+			// Only check events that started on or before the target date
+			if (eventDate.isAfter(targetDate)) {
+				return false;
+			}
+
+			const daysDiff = targetDate.diff(eventDate, "day");
+
+			switch (event.repeat_every) {
+				case "Daily":
+					return true; // Every day after start date
+				case "Weekly":
+					return daysDiff % 7 === 0; // Every 7 days
+				case "Monthly":
+					// Same day of month
+					return eventDate.date() === targetDate.date();
+				case "Yearly":
+					// Same day and month
+					return eventDate.date() === targetDate.date() &&
+						eventDate.month() === targetDate.month();
+				default:
+					return false;
+			}
+		}
+
+		return false;
+	});
 }
 
 function AddEventButton({

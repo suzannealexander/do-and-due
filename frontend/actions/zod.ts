@@ -58,7 +58,7 @@ export const createEventSchema = z.object({
 	members: z.string({
 		required_error: "At least one member must be selected",
 	}),
-	repeats: z.any(), // not implemented yet
+	repeats: z.enum(["None", "Daily", "Weekly", "Monthly", "Yearly"])
 });
 
 export const addMemberSchema = z.object({

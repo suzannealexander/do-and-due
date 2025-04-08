@@ -131,10 +131,53 @@ function getEventDatesInMonth(
 	displayDate: Dayjs,
 ): Set<number> {
 	const eventDates = new Set<number>();
+	const daysInMonth = displayDate.daysInMonth();
+
 	events.forEach((event) => {
 		const eventDate = dayjs(event.first_date);
+
+		// Add the original event date if it's in this month
 		if (eventDate.isSame(displayDate, "month")) {
 			eventDates.add(eventDate.date());
+		}
+
+		// Handle repeating events
+		if (event.repeat_every) {
+			// Check each day in the month
+			for (let day = 1; day <= daysInMonth; day++) {
+				const currentDate = displayDate.date(day);
+
+				// Skip dates before the event starts
+				if (currentDate.isBefore(eventDate)) {
+					continue;
+				}
+
+				const daysDiff = currentDate.diff(eventDate, "day");
+
+				switch (event.repeat_every) {
+					case "Daily":
+						eventDates.add(day);
+						break;
+					case "Weekly":
+						if (daysDiff % 7 === 0) {
+							eventDates.add(day);
+						}
+						break;
+					case "Monthly":
+						// Same day of month
+						if (eventDate.date() === day) {
+							eventDates.add(day);
+						}
+						break;
+					case "Yearly":
+						// Same day and month
+						if (eventDate.date() === day &&
+							eventDate.month() === displayDate.month()) {
+							eventDates.add(day);
+						}
+						break;
+				}
+			}
 		}
 	});
 	return eventDates;

@@ -80,7 +80,7 @@ export default function HomeFrame({ userData }: { userData: UserDisplayData }) {
 	// query current date
 	const currentDate: Dayjs = dayjs();
 
-	const groups = [createNewGroupPlaceholder].concat(userData.groups);
+	const groups = [createNewGroupPlaceholder].concat(userData.groups || []);
 
 	// define state objects
 	const [groupState, updateGroupState] = useState<GroupStateData>({
