@@ -16,6 +16,7 @@ export default async function Home() {
 		console.log('User has groups:', userData.groups);
 	} else {
 		console.log('User has no groups yet');
+
 	}
 	return (
 		<PageLayout>

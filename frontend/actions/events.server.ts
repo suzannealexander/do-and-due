@@ -45,18 +45,40 @@ export async function setEventStatusAction(
 }
 
 export async function createEventAction(
-	formData: CreateEventFormData,
+	formData: any,
 	groupData: GroupDisplayData,
 ): Promise<CreateEventClientResponse> {
-	// convert the form data to the format expected by the backend
+	let memberNames: string[];
+	
+	// Parse members from the form data
+	if (typeof formData.members === 'string') {
+		memberNames = formData.members.trim().split(/\s+/);
+	} else {
+		memberNames = formData.members || [];
+	}
+	
+	// Create basic request data
 	const postData: CreateEventRequest = {
 		name: formData.name,
 		date: formData.date,
+		memberNames: memberNames,
 		repeatEvery: formData.repeats !== "None" ? formData.repeats : null,
-		memberNames: groupData.members.flatMap((member) => member.username),
 		groupId: groupData.id,
 	};
-	console.log(postData);
+	
+	// Add cost information if provided
+	if (formData.cost) {
+		postData.cost = {
+			name: formData.costName || `Cost for ${formData.name}`,
+			category: formData.costCategory,
+			amount: formData.cost.amount,
+			description: formData.costDescription,
+			payerUsername: formData.payerUsername,
+			shares: formData.cost.shares
+		};
+	}
+	
+	console.log("Event request data:", postData);
 
 	try {
 		const res = await fetch("http://127.0.0.1:8000/api/event/create/", {
@@ -67,14 +89,15 @@ export async function createEventAction(
 		});
 
 		if (res.ok) {
-			console.log("sign up ok");
+			console.log("event creation ok");
 			return { ok: true, message: "" };
 		} else {
-			console.log("sign up backend error");
+			const errorData = await res.json();
+			console.log("event creation backend error", errorData);
 			// if an error occurred on the backend
 			return {
 				ok: false,
-				message: "A backend error occurred during creation!",
+				message: errorData.message || "A backend error occurred during creation!",
 			};
 		}
 	} catch (error) {

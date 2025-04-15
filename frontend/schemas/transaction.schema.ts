@@ -124,6 +124,19 @@ export interface CreateEventRequest {
 	memberNames: string[]; // Usernames
 
 	groupId: number;
+	
+	// Optional cost information
+	cost?: {
+		name: string;
+		category?: string;
+		amount: number;
+		description?: string;
+		payerUsername: string;
+		shares: {
+			username: string;
+			amount: number;
+		}[];
+	};
 }
 
 export interface CreateEventResponse {
@@ -164,4 +177,76 @@ export interface MarkEventCompleteResponse {
 	eventStatus?: boolean;
 }
 
+// --------------------------------------------------------------------------------------
+
+// create cost --------------------------------------------------------------------------
+export interface CreateCostRequest {
+	name: string;
+	category?: string;
+	amount: number;
+	description?: string;
+	groupId: number;
+	payerId: number;
+	shares: {
+		borrowerId: number;
+		amount: number;
+	}[];
+}
+
+export interface CreateCostResponse {
+	success: boolean;
+	message: string;
+	costId?: number;
+}
+
+export interface CreateCostClientResponse {
+	ok: boolean;
+	message: string;
+	costId?: number;
+}
+// --------------------------------------------------------------------------------------
+
+// update cost status -------------------------------------------------------------------
+export interface UpdateCostShareStatusRequest {
+	costShareId: number;
+	isPaid: boolean;
+}
+
+export interface UpdateCostShareStatusResponse {
+	success: boolean;
+	message: string;
+	isPaid?: boolean;
+}
+// --------------------------------------------------------------------------------------
+
+// get costs for group ------------------------------------------------------------------
+export interface GetGroupCostsRequest {
+	groupId: number;
+}
+
+export interface GetGroupCostsResponse {
+	success: boolean;
+	message: string;
+	costs?: {
+		id: number;
+		name: string;
+		category: string | null;
+		amount: number;
+		dateAdded: string;
+		description: string | null;
+		payer: {
+			username: string;
+			photoUrl: string;
+		};
+		shares: {
+			id: number;
+			amount: number;
+			isPaid: boolean;
+			borrower: {
+				username: string;
+				photoUrl: string;
+			};
+		}[];
+	}[];
+}
 // --------------------------------------------------------------------------------------

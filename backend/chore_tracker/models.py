@@ -92,11 +92,25 @@ class Cost(models.Model):
     name = models.CharField(max_length=60)
     category = models.CharField(max_length=40, null=True, blank=True)
     amount = models.FloatField()
+    date_added = models.DateField(auto_now_add=True)
+    description = models.TextField(null=True, blank=True)
 
     # Relationships
-    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="costs")
-    borrower = models.ForeignKey(User, on_delete=models.CASCADE, related_name="borrower")
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="costs")
     payer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="costs")
+    # Changed from single borrower to multiple borrowers
+    borrowers = models.ManyToManyField(User, related_name="borrowed_costs", through='CostShare')
 
     def __str__(self):
         return self.name
+
+
+class CostShare(models.Model):
+    id = models.AutoField(primary_key=True)
+    cost = models.ForeignKey(Cost, on_delete=models.CASCADE, related_name="shares")
+    borrower = models.ForeignKey(User, on_delete=models.CASCADE, related_name="cost_shares")
+    amount = models.FloatField()  # Share amount for this specific user
+    is_paid = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return f"{self.borrower.username}'s share of {self.cost.name}"

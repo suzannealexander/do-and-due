@@ -58,10 +58,29 @@ export const createEventSchema = z.object({
 	members: z.string({
 		required_error: "At least one member must be selected",
 	}),
+	
+	// Optional cost fields
+	costName: z.string().optional(),
+	costCategory: z.string().optional(),
+	costDescription: z.string().optional(),
+	payerUsername: z.string().optional(),
 	repeats: z.enum(["None", "Daily", "Weekly", "Monthly", "Yearly"])
 });
 
 export const addMemberSchema = z.object({
 	groupName: z.string({ required_error: "Group name is required" }),
 	members: z.string(),
+});
+
+export const createCostSchema = z.object({
+	name: z.string({ required_error: "Cost name is required" })
+		.min(2, "Cost name must be at least 2 characters"),
+	category: z.string().optional(),
+	amount: z.coerce.number({ required_error: "Amount is required" })
+		.positive("Amount must be positive"),
+	description: z.string().optional(),
+	payerUsername: z.string({ required_error: "Payer is required" }),
+	shares: z.string({ required_error: "Shares are required" })
+		.regex(/^[a-zA-Z0-9_]+:[0-9]+(\.[0-9]{1,2})?(,[a-zA-Z0-9_]+:[0-9]+(\.[0-9]{1,2})?)*$/, 
+			"Shares must be in the format 'username1:amount1,username2:amount2'")
 });

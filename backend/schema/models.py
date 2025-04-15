@@ -1,4 +1,4 @@
-from base_models import UserBase, EventBase, CostBase, GroupBase
+from base_models import UserBase, EventBase, CostBase, GroupBase, CostShareBase
 
 
 # define top-level pydantic classes *with* relations
@@ -10,8 +10,8 @@ class User(UserBase):
 
     events: list[EventBase]
 
-    costs: list[CostBase]
-    receipts: list[CostBase]
+    costs: list[CostBase]  # costs where user is payer
+    cost_shares: list[CostShareBase]  # shares of costs where user is borrower
 
 
 class Event(EventBase):
@@ -25,14 +25,24 @@ class Event(EventBase):
     group: GroupBase
 
 
+class CostShare(CostShareBase):
+    # relationships
+    cost_id: int
+    cost: CostBase
+    
+    borrower_id: int
+    borrower: UserBase
+
+
 class Cost(CostBase):
     # relationships
-    recipient_id: int
-    recipient: UserBase
+    # payer relationship
+    payer_id: int
+    payer: UserBase
 
-    sender_ids: list[int]
-    senders: list[UserBase]
-
+    # borrowers relationship through shares
+    shares: list[CostShareBase]
+    
     # group relationship
     group_id: int
     group: GroupBase

@@ -31,7 +31,18 @@ class CostBase(BaseModel):
     id: int
     name: str
     category: str
-    amount: str
+    amount: float
+    date_added: str
+    description: str | None
+
+    class Config:
+        orm_mode: bool = True
+
+
+class CostShareBase(BaseModel):
+    id: int
+    amount: float
+    is_paid: bool
 
     class Config:
         orm_mode: bool = True

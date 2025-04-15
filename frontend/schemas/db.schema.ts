@@ -29,9 +29,38 @@ export interface Group {
 	eventIds: number[];
 	events?: Event[]; // [Array of Event items, each should refer to a recurring/individual task/event which should be displayed on the group calendar]
 
-	// costIds: number[];
-	// costs?: Cost[]; // [Array of Cost items, each should refer to a cost which is divvied up between selected members in the group]
+	costIds: number[];
+	costs?: Cost[]; // [Array of Cost items, each should refer to a cost which is divvied up between selected members in the group]
 	// [Theming options for users to customize colors/other?]
+}
+
+export interface Cost {
+	id: number;
+	name: string;
+	category: string | null;
+	amount: number;
+	dateAdded: string;
+	description: string | null;
+
+	payerId: number;
+	payer?: User;
+
+	eventId: number;
+	event?: Event;
+
+	shares: CostShare[];
+}
+
+export interface CostShare {
+	id: number;
+	amount: number;
+	isPaid: boolean;
+
+	costId: number;
+	cost?: Cost;
+
+	borrowerId: number;
+	borrower?: User;
 }
 
 export interface Event {
@@ -47,4 +76,6 @@ export interface Event {
 
 	groupId: number;
 	group: Group;
+	
+	costs: Cost[];
 }

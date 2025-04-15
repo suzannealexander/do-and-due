@@ -24,6 +24,7 @@ export interface EventDisplayData {
 	first_date: string;
 	repeat_every: string | null;
 	is_complete: boolean;
+	costs: CostDisplayData[];
 }
 
 // expected format for general group display data passed to frontend pages
@@ -32,6 +33,26 @@ export interface GroupDisplayData {
 	name: string;
 	members: PublicUserDisplayData[];
 	events: EventDisplayData[];
+}
+
+// expected format for cost display data
+export interface CostDisplayData {
+	id: number;
+	name: string;
+	category: string | null;
+	amount: number;
+	dateAdded: string;
+	description: string | null;
+	payer: PublicUserDisplayData;
+	shares: CostShareDisplayData[];
+}
+
+// expected format for cost share display data
+export interface CostShareDisplayData {
+	id: number;
+	amount: number;
+	isPaid: boolean;
+	borrower: PublicUserDisplayData;
 }
 
 export interface PublicUserDisplayData {
@@ -79,5 +100,14 @@ export interface CreateEventFormData {
 export interface AddUserToGroupFormData {
 	groupId: number;
 	usernames: string[];
+}
+
+export interface CreateCostFormData {
+	name: string;
+	category?: string;
+	amount: number;
+	description?: string;
+	payerUsername: string;
+	shares: string; // Format: "username1:amount1,username2:amount2"
 }
 // --------------------------------------------------------------------------------------

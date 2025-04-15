@@ -1,9 +1,6 @@
 "use client";
 
-import {
-	createEventAction,
-	setEventStatusAction,
-} from "@/actions/events.server";
+import { setEventStatusAction } from "@/actions/events.server";
 import {
 	EventDisplayData,
 	GroupDisplayData,
@@ -11,14 +8,8 @@ import {
 } from "@/schemas/fe.schema";
 import dayjs, { Dayjs } from "dayjs";
 import { JSX, useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
-import { ErrorPopup, ErrorText } from "@/components/Errors";
-import Input from "@/components/Input";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { createEventSchema } from "@/actions/zod";
-import Button from "@/components/Button";
 import { MarkEventCompleteResponse } from "@/schemas/transaction.schema";
-import { useRouter } from "next/navigation";
+import AddEventForm from "./AddEventForm";
 
 export default function EventsFrame({
 	groupData,
@@ -54,144 +45,6 @@ export default function EventsFrame({
 	);
 }
 
-// function AddEventForm() {}
-
-function AddEventForm({
-	groupData,
-	dateState,
-	toggleAddEventState,
-}: {
-	groupData: GroupDisplayData;
-	dateState: DateStateData;
-	toggleAddEventState: CallableFunction;
-}) {
-	const {
-		register,
-		handleSubmit,
-		setError,
-		watch,
-		formState: { errors, isSubmitting },
-	} = useForm({
-		resolver: zodResolver(createEventSchema),
-		defaultValues: {
-			repeats: "None"
-		}
-	});
-	const router = useRouter();
-	const repeatValue = watch("repeats");
-
-	const onSubmit = async (data: any) => {
-		console.log("Submitting event with data:", data);
-		const res = await createEventAction(data, groupData);
-		console.log("AddEventForm response:", res);
-		if (res.ok) {
-			toggleAddEventState();
-			// Use router.refresh() instead of push to refresh the page data without a full navigation
-			router.refresh();
-		} else {
-			console.error("Failed to create event:", res.message);
-		}
-	};
-
-	return (
-		<div className="w-full">
-			<button
-				onClick={() => toggleAddEventState()}
-				className="mb-8 rounded-lg hover:bg-gray-50"
-			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					width="48"
-					height="48"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					strokeWidth="2"
-					strokeLinecap="round"
-					strokeLinejoin="round"
-					className="rounded-lg stroke-gray-400 hover:stroke-purple-500"
-				>
-					<path d="M18 6 6 18" />
-					<path d="m6 6 12 12" />
-				</svg>
-			</button>
-			<form
-				onSubmit={handleSubmit(onSubmit)}
-				className="w-full space-y-6"
-			>
-				{errors.root && <ErrorPopup message={errors.root.message} />}
-				<div>
-					<Input
-						type="text"
-						{...register("name")}
-						label="Event Name"
-					/>
-					{errors.name && <ErrorText message={errors.name.message} />}
-				</div>
-
-				<div>
-					<Input
-						type="text"
-						{...register("date")}
-						label="First Date"
-						value={dateState.target.format("YYYY-MM-DD")}
-						disabled
-					/>
-					{errors.date && <ErrorText message={errors.date.message} />}
-				</div>
-
-				<div>
-					<Input
-						type="text"
-						{...register("members")}
-						label="Members (separated by spaces)"
-					/>
-					{errors.members && (
-						<ErrorText message={errors.members.message} />
-					)}
-				</div>
-
-				<div>
-					<label className="mb-1 block text-sm font-medium text-gray-700">
-						Repeats
-					</label>
-					<div className="flex space-x-2 overflow-x-auto pb-2">
-						{["None", "Daily", "Weekly", "Monthly", "Yearly"].map(
-							(option, index) => (
-								<label
-									key={option}
-									className="flex-shrink-0 cursor-pointer rounded-lg border border-gray-300 px-4 py-2 text-sm shadow-sm transition-all duration-200 hover:border-purple-500 hover:shadow"
-								>
-									<input
-										type="radio"
-										value={option}
-										checked={repeatValue === option}
-										{...register("repeats")}
-										className="peer hidden"
-									/>
-									<span className="peer-checked:font-semibold peer-checked:text-purple-600">
-										{option}
-									</span>
-								</label>
-							),
-						)}
-					</div>
-					{/* {errors.repeats && (
-						<ErrorText message={errors.repeats.message} />
-					)} */}
-				</div>
-
-				<Button
-					className="w-full"
-					type="submit"
-					disabled={isSubmitting}
-				>
-					Submit
-				</Button>
-			</form>
-		</div>
-	);
-}
 
 function EventsDisplay({
 	groupData,
@@ -306,6 +159,7 @@ interface Event {
 
 function EventItem({ event }: { event: EventDisplayData }) {
 	const [eventState, setEventState] = useState<boolean>(event.is_complete);
+	const [isExpanded, setIsExpanded] = useState(false);
 
 	const handleClick = async () => {
 		const res: MarkEventCompleteResponse = await setEventStatusAction(
@@ -322,24 +176,116 @@ function EventItem({ event }: { event: EventDisplayData }) {
 		}
 	};
 
+	const hasCosts = event.costs && event.costs.length > 0;
+
 	return (
-		<div className="flex w-full flex-row flex-nowrap items-start gap-2 p-1 text-base hover:bg-gray-50">
-			<input
-				type="checkbox"
-				checked={eventState}
-				onClick={handleClick}
-				readOnly
-				className="h-6 w-6 flex-shrink-0 rounded-lg accent-purple-500"
-			/>
-			<div
-				className={
-					eventState
-						? "w-full flex-shrink-0 text-gray-500 line-through"
-						: "w-full flex-shrink-0"
-				}
-			>
-				{event.name}
+		<div className="w-full rounded-lg border border-gray-200 bg-white shadow-sm">
+			<div className="flex w-full flex-row flex-nowrap items-start gap-2 p-3 text-base hover:bg-gray-50">
+				<input
+					type="checkbox"
+					checked={eventState}
+					onClick={handleClick}
+					readOnly
+					className="h-6 w-6 flex-shrink-0 rounded-lg accent-purple-500"
+				/>
+				<div className="flex-grow">
+					<div
+						className={
+							eventState
+								? "flex-shrink-0 text-gray-500 line-through"
+								: "flex-shrink-0"
+						}
+					>
+						{event.name}
+					</div>
+					
+					{/* Show cost indicator if event has associated costs */}
+					{hasCosts && (
+						<div 
+							className="mt-1 cursor-pointer text-xs text-purple-600"
+							onClick={() => setIsExpanded(!isExpanded)}
+						>
+							<div className="flex items-center">
+								<svg 
+									xmlns="http://www.w3.org/2000/svg" 
+									viewBox="0 0 24 24" 
+									fill="none" 
+									stroke="currentColor" 
+									strokeWidth="2" 
+									strokeLinecap="round" 
+									strokeLinejoin="round"
+									className="mr-1 h-3 w-3"
+								>
+									<path d="M12 2v20M2 12h20" />
+								</svg>
+								View Cost Details
+								<svg 
+									xmlns="http://www.w3.org/2000/svg" 
+									viewBox="0 0 24 24" 
+									fill="none" 
+									stroke="currentColor" 
+									strokeWidth="2" 
+									strokeLinecap="round" 
+									strokeLinejoin="round"
+									className={`ml-1 h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+								>
+									<polyline points="6 9 12 15 18 9" />
+								</svg>
+							</div>
+						</div>
+					)}
+				</div>
 			</div>
+			
+			{/* Cost details panel */}
+			{isExpanded && hasCosts && (
+				<div className="border-t border-gray-200 p-3">
+					{event.costs.map((cost) => (
+						<div key={cost.id} className="mt-2 space-y-1">
+							<div className="flex justify-between">
+								<span className="font-medium">{cost.name}</span>
+								<span className="font-medium">${cost.amount.toFixed(2)}</span>
+							</div>
+							{cost.category && (
+								<div className="text-xs text-gray-500">
+									Category: {cost.category}
+								</div>
+							)}
+							<div className="text-xs text-gray-500">
+								Paid by: {cost.payer.username}
+							</div>
+							{cost.description && (
+								<div className="text-xs text-gray-600">
+									{cost.description}
+								</div>
+							)}
+							
+							{/* Cost shares */}
+							<div className="mt-2 rounded-md bg-gray-50 p-2">
+								<div className="text-xs font-medium text-gray-700">Shares:</div>
+								<div className="space-y-1">
+									{cost.shares.map((share) => (
+										<div key={share.id} className="flex items-center justify-between text-xs">
+											<div className="flex items-center">
+												<input
+													type="checkbox"
+													checked={share.isPaid}
+													readOnly
+													className="mr-1 h-3 w-3 accent-purple-500"
+												/>
+												<span className={share.isPaid ? "text-gray-400 line-through" : ""}>
+													{share.borrower.username}
+												</span>
+											</div>
+											<span>${share.amount.toFixed(2)}</span>
+										</div>
+									))}
+								</div>
+							</div>
+						</div>
+					))}
+				</div>
+			)}
 		</div>
 	);
 }

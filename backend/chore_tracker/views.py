@@ -9,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
-from chore_tracker.models import Group, Event, EventOccurrence
+from chore_tracker.models import Group, Event, EventOccurrence, Cost, CostShare
 from datetime import datetime
 import json
 from json import JSONDecodeError
@@ -122,8 +122,48 @@ class ViewGroup(APIView):
         try:
             group = Group.objects.get(id=group_id)
             members = group.members.all()
-            # events = group.events.all()
-            # costs = group.costs.all()
+            events = group.events.all().prefetch_related('costs__shares__borrower')
+
+            # Prepare events data with costs
+            events_data = []
+            for event in events:
+                # Get costs for this event
+                event_costs_data = []
+                for cost in event.costs.all():
+                    shares_data = []
+                    for share in cost.shares.all():
+                        shares_data.append({
+                            'id': share.id,
+                            'amount': share.amount,
+                            'isPaid': share.is_paid,
+                            'borrower': {
+                                'username': share.borrower.username,
+                                'photoUrl': share.borrower.photo_url
+                            }
+                        })
+                    
+                    event_costs_data.append({
+                        'id': cost.id,
+                        'name': cost.name,
+                        'category': cost.category,
+                        'amount': cost.amount,
+                        'dateAdded': cost.date_added.isoformat(),
+                        'description': cost.description,
+                        'payer': {
+                            'username': cost.payer.username,
+                            'photoUrl': cost.payer.photo_url
+                        },
+                        'shares': shares_data
+                    })
+                
+                events_data.append({
+                    'id': event.id,
+                    'name': event.name,
+                    'first_date': event.first_date.isoformat() if hasattr(event.first_date, 'isoformat') else str(event.first_date),
+                    'repeat_every': event.repeat_every,
+                    'is_complete': event.is_complete,
+                    'costs': event_costs_data
+                })
 
             return JsonResponse({
                 'group': {
@@ -134,8 +174,7 @@ class ViewGroup(APIView):
                     'timezone': group.timezone,
                     'creator': group.creator.username,
                     'members': [member.username for member in members],
-                    # 'events': [{'id': event.id, 'name': event.name} for event in events],
-                    # 'costs': [{'id': cost.id, 'name': cost.name, 'amount': cost.amount} for cost in costs],
+                    'events': events_data,
                 }
             }, status=200)
         except Group.DoesNotExist:
@@ -190,10 +229,9 @@ class AddUsersToGroup(APIView):
 
 
 class CreateEvent(APIView):
-    """ Create an Event """
+    """ Create an Event with optional cost """
 
     def post(self, request):
-
         try:
             data = json.loads(request.body)
 
@@ -222,6 +260,7 @@ class CreateEvent(APIView):
             # Get assigned members and add them. This is required due to the ManyToManyField
             group_members = group.members.all()
             memberNames = data.get("memberNames", [])
+            event_members = []  # Keep track of event members for cost assignment
 
             for username in memberNames:
                 try:
@@ -229,6 +268,7 @@ class CreateEvent(APIView):
 
                     if user in group_members:
                         event.members.add(user)
+                        event_members.append(user)
                     else:
                         return JsonResponse(
                             {"success": False, "message": f"User {username} not in group"}, status=400
@@ -239,11 +279,80 @@ class CreateEvent(APIView):
                         {"success": False, "message": f"User {username} not found"}, status=400
                     )
                 
-            # TODO: Add an occurrence of the Event 
-            #       For recurring Events, we need to add multiple. 
-            #       Maybe we can make a new one when the date/time for previous one has passed?
+            # Process cost information if provided
+            cost_data = data.get("cost")
+            if cost_data:
+                try:
+                    # Find the payer
+                    payer_username = cost_data.get("payerUsername")
+                    try:
+                        payer = User.objects.get(username=payer_username)
+                        if payer not in group_members:
+                            return JsonResponse(
+                                {"success": False, "message": f"Payer {payer_username} not in group"}, status=400
+                            )
+                    except User.DoesNotExist:
+                        return JsonResponse(
+                            {"success": False, "message": f"Payer {payer_username} not found"}, status=400
+                        )
 
-            return JsonResponse({"success": True, "message": ""}, status=200)
+                    # Create the cost
+                    cost = Cost.objects.create(
+                        name=cost_data.get("name"),
+                        category=cost_data.get("category"),
+                        amount=cost_data.get("amount"),
+                        description=cost_data.get("description"),
+                        event=event,
+                        payer=payer
+                    )
+
+                    # Add cost shares
+                    shares = cost_data.get("shares", [])
+                    total_share_amount = 0
+                    
+                    for share_data in shares:
+                        username = share_data.get("username")
+                        share_amount = share_data.get("amount")
+                        
+                        if username is None or share_amount is None:
+                            return JsonResponse(
+                                {"success": False, "message": "Invalid share data: missing username or amount"}, status=400
+                            )
+                        
+                        try:
+                            borrower = User.objects.get(username=username)
+                            
+                            if borrower not in group_members:
+                                return JsonResponse(
+                                    {"success": False, "message": f"User {username} is not a member of the group"}, status=400
+                                )
+                            
+                            CostShare.objects.create(
+                                cost=cost,
+                                borrower=borrower,
+                                amount=share_amount,
+                                is_paid=False
+                            )
+                            
+                            total_share_amount += float(share_amount)
+                            
+                        except User.DoesNotExist:
+                            return JsonResponse(
+                                {"success": False, "message": f"Borrower {username} does not exist"}, status=400
+                            )
+                    
+                    # Validate that the sum of shares equals the total cost amount
+                    if abs(total_share_amount - float(cost_data.get("amount"))) > 0.01:  # Allow small rounding error
+                        return JsonResponse(
+                            {"success": False, "message": f"Sum of shares ({total_share_amount}) does not equal total cost amount ({cost_data.get('amount')})"}, status=400
+                        )
+                        
+                except Exception as e:
+                    return JsonResponse(
+                        {"success": False, "message": f"Error creating cost: {str(e)}"}, status=400
+                    )
+
+            return JsonResponse({"success": True, "message": "Event created successfully"}, status=200)
 
         except JSONDecodeError:
             return JsonResponse(
@@ -310,17 +419,56 @@ class CurrentUserView(APIView):
     def get(self, request):
         if request.user.is_authenticated:
             user = request.user
-            # groups = user.groups.values('id', 'name')
-            groups = Group.objects.filter(members__in=[user]).prefetch_related('events')
+            groups = Group.objects.filter(members__in=[user]).prefetch_related('events__costs__shares__borrower')
 
             group_data = []
             for group in groups:
-                events = group.events.all().values('id', 'name', 'first_date', 'repeat_every', 'is_complete') # type: ignore
+                # Ensure events data is properly formatted and always exists
+                events_data = []
+                for event in group.events.all().prefetch_related('costs__shares__borrower'):
+                    # Get costs for this event
+                    event_costs_data = []
+                    for cost in event.costs.all():
+                        shares_data = []
+                        for share in cost.shares.all():
+                            shares_data.append({
+                                'id': share.id,
+                                'amount': share.amount,
+                                'isPaid': share.is_paid,
+                                'borrower': {
+                                    'username': share.borrower.username,
+                                    'photoUrl': share.borrower.photo_url
+                                }
+                            })
+                        
+                        event_costs_data.append({
+                            'id': cost.id,
+                            'name': cost.name,
+                            'category': cost.category,
+                            'amount': cost.amount,
+                            'dateAdded': cost.date_added.isoformat(),
+                            'description': cost.description,
+                            'payer': {
+                                'username': cost.payer.username,
+                                'photoUrl': cost.payer.photo_url
+                            },
+                            'shares': shares_data
+                        })
+                    
+                    events_data.append({
+                        'id': event.id,
+                        'name': event.name,
+                        'first_date': event.first_date.isoformat() if hasattr(event.first_date, 'isoformat') else str(event.first_date),
+                        'repeat_every': event.repeat_every,
+                        'is_complete': event.is_complete,
+                        'costs': event_costs_data
+                    })
+                
                 group_data.append({
                     'id': group.id,
                     'name': group.name,
                     'members': list(group.members.all().values('username', 'photo_url')),
-                    'events': list(events)
+                    'events': events_data  # Always include events array, even if empty
                 })
 
             return JsonResponse({
@@ -356,5 +504,46 @@ class MarkEventComplete(APIView):
             return JsonResponse(
                 {"success": False, "message": "Invalid JSON in request", "eventStatus": event.is_complete}, status=400
             )
+
+
+
+
+class UpdateCostShareStatus(APIView):
+    """ Update the paid status of a cost share """
+    
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            
+            cost_share_id = data.get("costShareId")
+            is_paid = data.get("isPaid")
+            
+            if cost_share_id is None or is_paid is None:
+                return JsonResponse(
+                    {"success": False, "message": "Missing required fields: costShareId or isPaid"}, status=400
+                )
+            
+            try:
+                cost_share = CostShare.objects.get(id=cost_share_id)
+                cost_share.is_paid = is_paid
+                cost_share.save()
+                
+                return JsonResponse(
+                    {"success": True, "message": "Cost share status updated", "isPaid": cost_share.is_paid}, status=200
+                )
+            except CostShare.DoesNotExist:
+                return JsonResponse(
+                    {"success": False, "message": "Cost share does not exist"}, status=404
+                )
+                
+        except JSONDecodeError:
+            return JsonResponse(
+                {"success": False, "message": "Invalid JSON in request"}, status=400
+            )
+        except Exception as e:
+            return JsonResponse(
+                {"success": False, "message": f"Error updating cost share: {str(e)}"}, status=500
+            )
+
 
 
